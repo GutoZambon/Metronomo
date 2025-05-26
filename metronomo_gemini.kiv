@@ -1,0 +1,104 @@
+#:kivy 2.0.0
+
+<MetronomeLayout>:
+    # Referências aos IDs para acesso no código Python
+    cycles_input: cycles_input_id
+    beats_spinner: beats_spinner_id
+    bpm_input: bpm_input_id
+    start_stop_button: start_stop_button_id
+
+    orientation: 'vertical'
+    padding: dp(10)  # Usa dp para densidade de pixel
+    spacing: dp(10)
+
+    # --- Seção de Inputs ---
+    BoxLayout:
+        size_hint_y: None
+        height: dp(100) # Altura fixa para a área de inputs
+        spacing: dp(5)
+
+        BoxLayout: # Coluna para Ciclos
+            orientation: 'vertical'
+            Label:
+                text: 'Ciclos:'
+                size_hint_y: None
+                height: dp(30)
+            TextInput:
+                id: cycles_input_id
+                text: root.total_cycles_input # Liga ao property do Python
+                on_text: root.total_cycles_input = self.text # Atualiza property no Python
+                input_filter: 'int' # Permite apenas números inteiros
+                multiline: False
+                halign: 'center'
+                font_size: '20sp' # sp para fontes escaláveis
+
+        BoxLayout: # Coluna para Tempos
+            orientation: 'vertical'
+            Label:
+                text: 'Tempos:'
+                size_hint_y: None
+                height: dp(30)
+            Spinner: # Dropdown simples para escolher 2 ou 4
+                id: beats_spinner_id
+                text: root.beats_per_cycle_input # Liga ao property
+                values: ['2', '4']
+                on_text: root.beats_per_cycle_input = self.text # Atualiza property
+                font_size: '20sp'
+                sync_height: True # Ajusta altura ao conteúdo
+
+        BoxLayout: # Coluna para BPM
+            orientation: 'vertical'
+            Label:
+                text: 'BPM:'
+                size_hint_y: None
+                height: dp(30)
+            TextInput:
+                id: bpm_input_id
+                text: root.bpm_input # Liga ao property
+                on_text: root.bpm_input = self.text # Atualiza property
+                input_filter: 'int'
+                multiline: False
+                halign: 'center'
+                font_size: '20sp'
+
+    # --- Seção de Display Visual ---
+    RelativeLayout:
+        # RelativeLayout permite posicionar elementos filhos
+        # com base em posições relativas (ex: top, right)
+        id: display_area
+        size_hint_y: 0.8 # Ocupa a maior parte do espaço vertical restante
+
+        # Fundo dinâmico (o "quadrado grande")
+        canvas.before:
+            Color:
+                rgba: root.beat_area_color # Cor controlada pelo Python
+            Rectangle:
+                pos: self.pos
+                size: self.size
+
+        # Label grande para o número do tempo (centralizado)
+        Label:
+            text: root.beat_display_text # Liga ao property do Python
+            font_size: '150sp' # Bem grande
+            bold: True
+            # Centraliza o Label dentro do RelativeLayout
+            pos_hint: {'center_x': 0.5, 'center_y': 0.5}
+
+        # Label pequeno para o contador de ciclos (canto superior direito)
+        Label:
+            text: root.cycle_display_text # Liga ao property do Python
+            font_size: '25sp'
+            size_hint: None, None # Desabilita size_hint para usar pos_hint
+            size: self.texture_size # Ajusta o tamanho ao texto automaticamente
+            # Posiciona perto do canto superior direito do RelativeLayout
+            pos_hint: {'right': 0.98, 'top': 0.98}
+            color: 0, 0, 0, 1 # Cor do texto (preto)
+
+    # --- Seção de Controle ---
+    Button:
+        id: start_stop_button_id
+        text: 'Iniciar'
+        size_hint_y: None # Altura fixa
+        height: dp(50)
+        font_size: '20sp'
+        on_press: root.start_stop() # Chama a função no Python
