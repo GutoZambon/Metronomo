@@ -11,179 +11,208 @@ from kivy.graphics import Color, Rectangle
 from kivy.uix.modalview import ModalView
 from kivy.uix.floatlayout import FloatLayout
 from kivy.properties import NumericProperty
-from plyer import audio
 from kivy.resources import resource_find
-import platform
 
+# Utilizando o SoundLoader do Kivy, que é multiplataforma.
+# Isso simplifica o código, não precisando da verificação de sistema operacional.
+from kivy.core.audio import SoundLoader
 
-if platform.system() == "Windows":
-    from kivy.core.audio import SoundLoader
-    def emitir_bip():
-        path = resource_find('bip.wav')
-        if path:
-            sound = SoundLoader.load(path)
-            if sound:
-                sound.play()
-else:
-    from plyer import audio
-    def emitir_bip():
-        path = resource_find('bip.wav')
-        if path:
-            audio.play()
+# Carregamos o som uma única vez para otimizar o desempenho.
+sound_path = resource_find('bip.wav')
+bip_sound = SoundLoader.load(sound_path) if sound_path else None
+
+def emitir_bip():
+    if bip_sound:
+        bip_sound.play()
+    else:
+        print("Aviso: Arquivo 'bip.wav' não encontrado. Não será emitido som.")
+
 
 class FullscreenDisplay(ModalView):
     remaining_time = NumericProperty(0)
-    def __init__(self, tempo, ciclo, total_ciclos, cor, respiro=False, on_close=None, **kwargs):
+    def __init__(self, tempo, ciclo, total_ciclos, cor, on_close=None, **kwargs):
         super().__init__(**kwargs)
         self.size_hint = (1, 1)
         self.auto_dismiss = False
         layout = FloatLayout()
         box = BoxLayout()
-        lbl = Label(text='RESPIRE' if respiro else str(tempo), font_size=120, color=(0, 0, 0, 1))
-        lbl_ciclo = Label(text=f'{ciclo}/{total_ciclos}', size_hint=(None, None), size=(80, 40),
-                          pos_hint={'center_x': 0.95, 'center_y': 0.5}, color=(0, 0, 0, 1))
+        
+        # Aumentamos a fonte para melhor visualização em tela cheia
+        lbl = Label(text=str(tempo), font_size=150, color=(0, 0, 0, 1))
+        lbl_ciclo = Label(text=f'Ciclo: {ciclo}/{total_ciclos}', size_hint=(None, None), size=(120, 40),
+                          pos_hint={'center_x': 0.92, 'center_y': 0.95}, color=(0, 0, 0, 1), font_size=20)
         close_btn = Button(text='X', size_hint=(None, None), size=(50, 50),
                            pos_hint={'right': 1, 'top': 1})
         close_btn.bind(on_press=lambda instance: self.close_modal(on_close))
+        
         box.add_widget(lbl)
         with box.canvas.before:
             Color(*cor)
             self.rect = Rectangle(size=box.size, pos=box.pos)
         box.bind(pos=self.update_rect, size=self.update_rect)
+        
         layout.add_widget(box)
         layout.add_widget(lbl_ciclo)
         layout.add_widget(close_btn)
-        self.countdown_lbl = Label(text=f'{self.remaining_time:.1f}s', font_size=30,
+        
+        self.countdown_lbl = Label(text=f'{self.remaining_time:.2f}s', font_size=30,
                                    color=(0, 0, 0, 1), size_hint=(None, None),
                                    size=(100, 50), pos_hint={'center_x': 0.5, 'y': 0.05})
         layout.add_widget(self.countdown_lbl)
+        
         self.add_widget(layout)
-        Clock.schedule_interval(self.update_countdown, 0.1)
+        # Agendamos a atualização do contador regressivo
+        self.update_event = Clock.schedule_interval(self.update_countdown, 0.1)
+
     def close_modal(self, on_close):
+        Clock.unschedule(self.update_event) # Para o contador ao fechar
         self.dismiss()
         if on_close:
             on_close()
+
     def update_countdown(self, dt):
         self.remaining_time -= dt
         if self.remaining_time < 0:
             self.remaining_time = 0
         self.countdown_lbl.text = f'{self.remaining_time:.1f}s'
+
     def update_rect(self, instance, value):
         self.rect.pos = instance.pos
         self.rect.size = instance.size
 
+
 class MetronomeScreen(BoxLayout):
     def __init__(self, **kwargs):
         super().__init__(orientation='vertical', padding=10, spacing=10, **kwargs)
+        # Inputs para configuração
         self.ciclos = TextInput(text='10', hint_text='Quantidade de ciclos', input_filter='int', multiline=False)
+        self.add_widget(Label(text='Ciclos:'))
         self.add_widget(self.ciclos)
-        self.vezes_por_minuto = TextInput(text='13', hint_text='bpm', input_filter='int', multiline=False)
+        
+        self.vezes_por_minuto = TextInput(text='80', hint_text='BPM (Batidas por Minuto)', input_filter='int', multiline=False)
+        self.add_widget(Label(text='BPM (Batidas por Minuto):'))
         self.add_widget(self.vezes_por_minuto)
+        
+        # Dropdown para selecionar os tempos
         self.tempos_dropdown = DropDown()
         for t in ['2', '4', '8']:
-            btn = Button(text=t, size_hint_y=None, height=40)
+            btn = Button(text=t, size_hint_y=None, height=44)
             btn.bind(on_release=lambda btn: self.tempos_dropdown.select(btn.text))
             self.tempos_dropdown.add_widget(btn)
-        self.tempos = Button(text='8')
+            
+        self.tempos = Button(text='4') # Valor inicial
         self.tempos.bind(on_release=self.tempos_dropdown.open)
         self.tempos_dropdown.bind(on_select=lambda instance, x: setattr(self.tempos, 'text', x))
+        self.add_widget(Label(text='Tempos por Ciclo:'))
         self.add_widget(self.tempos)
+
+        # O CheckBox de respiro é mantido na interface, mas sua lógica será ignorada por enquanto
         respiro_layout = BoxLayout(orientation='horizontal', size_hint_y=None, height=40)
-        self.respiro_checkbox = CheckBox(active=True)
+        self.respiro_checkbox = CheckBox(active=False)
         respiro_layout.add_widget(self.respiro_checkbox)
-        respiro_layout.add_widget(Label(text='Respiro'))
+        respiro_layout.add_widget(Label(text='Respiro (Ignorado por enquanto)'))
         self.add_widget(respiro_layout)
-        self.start_btn = Button(text='Iniciar')
+        
+        self.start_btn = Button(text='Iniciar', font_size=20, background_color=(0, 1, 0, 1))
         self.start_btn.bind(on_press=self.iniciar)
         self.add_widget(self.start_btn)
+        
         self.tempo_atual = 0
         self.ciclo_atual = 0
         self.executando = False
         self.current_display = None
+        
+        # Dicionário de cores para cada tempo
         self.cores_tempos = {
-            1: (57/255, 255/255, 20/255, 1),
-            2: (255/255, 0/255, 255/255, 1),
-            3: (0/255, 255/255, 255/255, 1),
-            4: (255/255, 255/255, 0/255, 1),
-            5: (255/255, 117/255, 24/255, 1),
-            6: (0/255, 98/255, 255/255, 1),
-            7: (125/255, 0/255, 255/255, 1),
-            8: (255/255, 0/255, 0/255, 1)
+            1: (57/255, 255/255, 20/255, 1),   # Verde Limão
+            2: (255/255, 0/255, 255/255, 1),   # Magenta
+            3: (0/255, 255/255, 255/255, 1),   # Ciano
+            4: (255/255, 255/255, 0/255, 1),   # Amarelo
+            5: (255/255, 117/255, 24/255, 1),  # Laranja
+            6: (0/255, 98/255, 255/255, 1),    # Azul
+            7: (125/255, 0/255, 255/255, 1),   # Roxo
+            8: (255/255, 0/255, 0/255, 1)      # Vermelho
         }
 
     def iniciar(self, instance):
+        # Validação de entradas
         try:
             self.total_ciclos = int(self.ciclos.text)
             self.total_tempos = int(self.tempos.text)
             self.vezes_por_minuto_val = int(self.vezes_por_minuto.text)
-            if self.total_tempos not in [2, 4, 8]:
-                raise ValueError
-        except:
-            self.popup('Erro', 'Preencha corretamente todos os campos!')
+            if self.total_ciclos <= 0 or self.vezes_por_minuto_val <= 0:
+                raise ValueError("Valores devem ser positivos.")
+        except (ValueError, TypeError):
+            self.popup('Erro', 'Preencha corretamente todos os campos com números positivos!')
             return
-        self.tempo_atual = 1
+            
+        # --- LÓGICA PRINCIPAL CORRIGIDA ---
+        # O intervalo de cada batida é 60 segundos dividido pelo BPM.
+        self.intervalo = 60.0 / self.vezes_por_minuto_val
+        
+        self.tempo_atual = 0 # Começará em 1 na primeira chamada
         self.ciclo_atual = 1
-        self.intervalo = 60 / (self.vezes_por_minuto_val * self.total_tempos)
         self.executando = True
+        
+        # Desabilita o botão para evitar múltiplos cliques
+        self.start_btn.disabled = True
+        
+        # Cancela qualquer agendamento anterior e inicia o novo ciclo
         Clock.unschedule(self.ciclo_visual)
         Clock.schedule_interval(self.ciclo_visual, self.intervalo)
+        # Chama a primeira batida imediatamente
+        self.ciclo_visual(0)
 
     def ciclo_visual(self, dt):
         if not self.executando:
-            Clock.unschedule(self.ciclo_visual)
+            self.parar_execucao()
             return
+
+        # Avança o tempo
+        self.tempo_atual += 1
+
+        # Verifica se o ciclo terminou
         if self.tempo_atual > self.total_tempos:
-            if self.respiro_checkbox.active:
-                self.update_display(respiro=True)
-                Clock.unschedule(self.ciclo_visual)
-                Clock.schedule_once(self.finalizar_respiro, self.intervalo)
-                return
-            else:
-                self.proximo_ciclo()
-        else:
-            emitir_bip()
-            self.update_display()
-            self.tempo_atual += 1
-
-    def finalizar_respiro(self, dt):
-        self.proximo_ciclo()
-        if self.executando:
-            self.ciclo_visual(0)
-            Clock.schedule_interval(self.ciclo_visual, self.intervalo)
-
-    def proximo_ciclo(self):
-        self.tempo_atual = 1
-        if self.ciclo_atual >= self.total_ciclos:
-            Clock.unschedule(self.ciclo_visual)
-            self.executando = False
-            if self.current_display:
-                self.current_display.dismiss()
-            self.popup('Concluído', 'Ciclos finalizados!')
-        else:
             self.ciclo_atual += 1
-
-    def update_display(self, respiro=False):
+            self.tempo_atual = 1 # Reinicia o tempo para 1
+            
+            # Verifica se todos os ciclos foram concluídos
+            if self.ciclo_atual > self.total_ciclos:
+                self.parar_execucao()
+                self.popup('Concluído', 'Ciclos finalizados!')
+                return
+        
+        emitir_bip()
+        self.update_display()
+        
+    def update_display(self):
         if self.current_display:
             self.current_display.dismiss()
-        cor = (1, 1, 1, 1) if respiro else self.cores_tempos.get(self.tempo_atual, (1, 1, 1, 1))
+        
+        cor = self.cores_tempos.get(self.tempo_atual, (1, 1, 1, 1)) # Cor padrão branca
+        
         self.current_display = FullscreenDisplay(
             tempo=self.tempo_atual,
             ciclo=self.ciclo_atual,
             total_ciclos=self.total_ciclos,
             cor=cor,
-            respiro=respiro,
             on_close=self.parar_execucao
         )
         self.current_display.remaining_time = self.intervalo
         self.current_display.open()
 
-    def parar_execucao(self):
+    def parar_execucao(self, *args):
         self.executando = False
         Clock.unschedule(self.ciclo_visual)
+        if self.current_display:
+            self.current_display.dismiss()
+            self.current_display = None
+        self.start_btn.disabled = False # Reabilita o botão
 
     def popup(self, titulo, mensagem):
         popup = Popup(title=titulo, content=Label(text=mensagem), size_hint=(0.6, 0.4))
         popup.open()
+
 
 class MetronomeApp(App):
     def build(self):
